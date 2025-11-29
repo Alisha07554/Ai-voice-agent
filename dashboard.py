@@ -1,38 +1,15 @@
+# dashboard.py
+
 import streamlit as st
-import requests
-import json
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-AIRTABLE_API_KEY = os.getenv("AIRTABLE_API_KEY")
-AIRTABLE_BASE_ID = os.getenv("AIRTABLE_BASE_ID")
-AIRTABLE_TABLE_ID = os.getenv("AIRTABLE_TABLE_ID")
-
-st.set_page_config(page_title="AI Voice Agent Dashboard", layout="centered")
+from analysis import LAST_RESULT
 
 st.title("📞 AI Voice Agent Dashboard")
-st.write("Live sentiment, score, and lead updates")
 
-# Airtable URL
-url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_ID}"
+st.subheader("Latest Call Details")
 
-headers = {
-    "Authorization": f"Bearer {AIRTABLE_API_KEY}"
-}
+st.write(f"**Call SID:** {LAST_RESULT.get('call_sid')}")
+st.write(f"**Sentiment:** {LAST_RESULT.get('sentiment')}")
+st.write(f"**Score:** {LAST_RESULT.get('score')}")
+st.write(f"**Message:** {LAST_RESULT.get('message')}")
 
-# Fetch data
-response = requests.get(url, headers=headers)
-data = response.json()
-
-# Show records
-st.subheader("Lead Records")
-for record in data.get("records", []):
-    fields = record.get("fields", {})
-
-    st.markdown("---")
-    st.write(f"**Name:** {fields.get('name', 'Unknown')}")
-    st.write(f"**Sentiment:** {fields.get('sentiment', 'N/A')}")
-    st.write(f"**Score:** {fields.get('score', 'N/A')}")
-    st.write(f"**Message:** {fields.get('message', 'N/A')}")
+st.info("Refresh the page after each call to see updates.")
