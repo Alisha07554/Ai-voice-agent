@@ -6,75 +6,69 @@ import os
 
 from analysis import process_recording
 
-# Load variables from .env
 load_dotenv()
-
 app = Flask(__name__)
 
-# -----------------------------
-# 1️⃣ MAKE AN OUTGOING CALL
-# -----------------------------
+
+# ----------------------------------------------------
+# 1. MAKE CALL (simple)
+# ----------------------------------------------------
 @app.route("/call", methods=["GET"])
 def make_call():
-
     client = Client(
         os.getenv("TWILIO_ACCOUNT_SID"),
         os.getenv("TWILIO_AUTH_TOKEN")
     )
 
-    ngrok_url = os.getenv("NGROK_URL")  # THIS IS CORRECT
-    my_phone = os.getenv("MY_PHONE")    # +91 number
-    twilio_number = os.getenv("TWILIO_PHONE_NUMBER")
-
-    if not ngrok_url or not my_phone or not twilio_number:
-        return {"error": "Missing NGROK_URL or phone numbers in .env"}, 400
+    ngrok_url = os.getenv("NGROK_URL")
 
     call = client.calls.create(
-        to=my_phone,
-        from_=twilio_number,
+        to=os.getenv("MY_PHONE"),
+        from_=os.getenv("TWILIO_PHONE_NUMBER"),
         url=ngrok_url + "/voice"
     )
 
-    return {"status": "calling your number", "sid": call.sid}
+    return {"sid": call.sid, "status": "calling"}
 
 
-# -----------------------------
-# 2️⃣ TWILIO CALL INTERACTION
-# -----------------------------
+# ----------------------------------------------------
+# 2. VOICE FLOW
+# ----------------------------------------------------
 @app.route("/voice", methods=["POST"])
 def voice():
-    response = VoiceResponse()
-    
-    response.say("Hello! This is your AI assistant. Speak after the beep.")
+    r = VoiceResponse()
+    r.say("Hello! Please speak after the beep.")
 
-    response.record(
-        maxLength=8,
+    r.record(
+        maxLength=5,
         playBeep=True,
-        action="/recording",
-        trim="trim-silence"
+        action="/recording"
     )
 
-    return str(response)
+    return str(r)
 
 
-# -----------------------------
-# 3️⃣ HANDLE RECORDING
-# -----------------------------
+# ----------------------------------------------------
+# 3. RECORDING — ALWAYS CALLED
+# ----------------------------------------------------
 @app.route("/recording", methods=["POST"])
 def recording():
-    recording_url = request.form.get("RecordingUrl")
     call_sid = request.form.get("CallSid")
+    recording_url = request.form.get("RecordingUrl")
 
-    result = process_recording(recording_url, call_sid)
-    print("AI Result:", result)
+    # ❗ Twilio sends "" if call was NOT picked
+    if recording_url == "" or recording_url is None:
+        process_recording(None, call_sid)
+    else:
+        process_recording(recording_url, call_sid)
 
-    response = VoiceResponse()
-    response.say("Thank you! Your response has been saved.")
-    return str(response)
+    r = VoiceResponse()
+    r.say("Thank you.")
+    return str(r)
 
 
-# -----------------------------
-# 4️⃣ RUN SERVER
-# -----------------------------
+# ----------------------------------------------------
+# RUN SERVER
+# ----------------------------------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
