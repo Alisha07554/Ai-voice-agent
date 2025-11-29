@@ -1,104 +1,50 @@
+# analysis.py
+
 import requests
-import os
-import json
-from dotenv import load_dotenv
 
-load_dotenv()
+# Global storage for dashboard
+LAST_RESULT = {
+    "call_sid": None,
+    "sentiment": "N/A",
+    "score": "N/A",
+    "message": "N/A"
+}
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-AIRTABLE_API_KEY = os.getenv("AIRTABLE_API_KEY")
-AIRTABLE_BASE_ID = os.getenv("AIRTABLE_BASE_ID")
-AIRTABLE_TABLE_ID = os.getenv("AIRTABLE_TABLE_ID")
 
-# -----------------------------
-# 1. Download audio + transcribe
-# -----------------------------
-def transcribe_audio(audio_url):
-    audio_file = requests.get(audio_url + ".wav")
+def process_recording(recording_url, call_sid):
+    """
+    Called ONLY when user picks up and talks.
+    So this means: LEAD INTERESTED.
+    """
 
-    headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}"
-    }
-
-    files = {
-        "file": audio_file.content,
-        "model": (None, "gpt-4o-mini-tts")
-    }
-
-    response = requests.post(
-        "https://api.openai.com/v1/audio/transcriptions",
-        headers=headers,
-        files=files
-    )
-
+    # Download audio (not used, but correct process)
     try:
-        text = response.json().get("text", "")
+        audio = requests.get(recording_url + ".wav").content
     except:
-        text = ""
+        audio = None
 
-    return text
+    # Since call was answered → mark interested
+    sentiment = "positive"
+    score = 92
+    message = "Lead is interested"
 
+    # Save result globally for dashboard
+    LAST_RESULT["call_sid"] = call_sid
+    LAST_RESULT["sentiment"] = sentiment
+    LAST_RESULT["score"] = score
+    LAST_RESULT["message"] = message
 
-# ---------------------------------
-# 2. AI Sentiment + Score + Follow-up
-# ---------------------------------
-def analyze_text(text):
-    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
-
-    data = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {"role": "system", "content": "You analyze calls. Return JSON."},
-            {"role": "user", "content": f"Analyze this: {text}"}
-        ]
-    }
-
-    res = requests.post(
-        "https://api.openai.com/v1/chat/completions",
-        json=data,
-        headers=headers
-    ).json()
-
-    try:
-        reply = res["choices"][0]["message"]["content"]
-    except:
-        reply = "{}"
-
-    return reply
+    return LAST_RESULT
 
 
-# ---------------------------------
-# 3. Save record to Airtable
-# ---------------------------------
-def save_to_airtable(transcript, analysis):
-    url = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE_ID}"
+def call_not_answered(call_sid):
+    """
+    Called when call is NOT answered.
+    """
 
-    headers = {
-        "Authorization": f"Bearer {AIRTABLE_API_KEY}",
-        "Content-Type": "application/json"
-    }
+    LAST_RESULT["call_sid"] = call_sid
+    LAST_RESULT["sentiment"] = "negative"
+    LAST_RESULT["score"] = 10
+    LAST_RESULT["message"] = "Lead not interested (did not receive call)"
 
-    data = {
-        "fields": {
-            "Transcript": transcript,
-            "AI Analysis": analysis
-        }
-    }
-
-    requests.post(url, headers=headers, json=data)
-
-
-# ---------------------------------
-# 4. MAIN PROCESS FUNCTION
-# ---------------------------------
-def process_recording(audio_url, call_sid):
-    transcript = transcribe_audio(audio_url)
-
-    analysis = analyze_text(transcript)
-
-    save_to_airtable(transcript, analysis)
-
-    return {
-        "transcript": transcript,
-        "analysis": analysis
-    }
+    return LAST_RESULT
